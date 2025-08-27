@@ -1,0 +1,6 @@
+[project]
+name = "DB-CLI"
+version = "0.1.0"
+description = "DB CLI APP"
+requires-python = ">=3.13"
+dependencies = []
