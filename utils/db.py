@@ -2,8 +2,9 @@ from utils.base_storage import BaseKVStorage
 from utils.transaction import TransactionHandler
 
 
-class DB(BaseKVStorage):
-    pass
+class DB[K, V](BaseKVStorage):
+    def get_items_for_value(self, value: V) -> dict[K, V]:
+        return {k: v for k, v in self._db.items() if v == value}
 
 
 class DBManager:

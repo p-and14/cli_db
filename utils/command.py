@@ -21,8 +21,8 @@ class BaseCommandType(Enum):
 class BaseCommand[K, V](ABC):
     type: BaseCommandType = None
 
-    def __init__(self, app: DBManager, key: K = None, val: V = None):
-        self._app = app
+    def __init__(self, db_manager: DBManager, key: K = None, val: V = None):
+        self._db_manager = db_manager
         self.key = key
         self.val = val
 
@@ -44,35 +44,35 @@ class SetCommand[K, V](BaseCommand):
     type: BaseCommandType = BaseCommandType.SET
 
     def execute(self) -> None:
-        if self._app.tr_handler.transaction_exist():
-            transaction = self._app.tr_handler.get_last_transaction()
+        if self._db_manager.tr_handler.transaction_exist():
+            transaction = self._db_manager.tr_handler.get_last_transaction()
             transaction.items.set(self.key, self.val)
         else:
-            self._app.db.set(self.key, self.val)
+            self._db_manager.db.set(self.key, self.val)
 
 
 class GetCommand[K, V](BaseCommand):
     type: BaseCommandType = BaseCommandType.GET
 
-    def execute(self) -> V:
-        transactions = self._app.tr_handler.get_transactions()
-        for i in range(len(transactions) - 1, -1, -1):
-            value = transactions[i].items.get(self.key)
-            if value is not None:
-                return value
-
-        return self._app.db.get(self.key)
+    def execute(self) -> V | None:
+        transactions = self._db_manager.tr_handler.get_transactions()
+        if transactions:
+            for i in range(len(transactions) - 1, -1, -1):
+                value = transactions[i].items.get(self.key)
+                if value is not None:
+                    return value
+        return self._db_manager.db.get(self.key)
 
 
 class UnsetCommand[K, V](BaseCommand):
     type: BaseCommandType = BaseCommandType.UNSET
 
     def execute(self) -> None:
-        if self._app.tr_handler.transaction_exist():
-            transaction = self._app.tr_handler.get_last_transaction()
+        if self._db_manager.tr_handler.transaction_exist():
+            transaction = self._db_manager.tr_handler.get_last_transaction()
             transaction.items.unset(self.key)
         else:
-            self._app.db.unset(self.key)
+            self._db_manager.db.unset(self.key)
 
 
 class CountsCommand[K, V](BaseCommand):
@@ -80,14 +80,14 @@ class CountsCommand[K, V](BaseCommand):
 
     def execute(self) -> int:
         total = 0
-        items = self._app.db.get_items().copy()
-        transactions = self._app.tr_handler.get_transactions()
+        items = self._db_manager.db.get_items_for_value(self.val)
+        transactions = self._db_manager.tr_handler.get_transactions()
 
         for transaction in transactions:
             data = transaction.items.get_items()
             items.update(data)
 
-        for k, v in items.items():
+        for v in items.values():
             if v == self.val:
                 total += 1
         return total
@@ -98,8 +98,8 @@ class FindCommand[K, V](BaseCommand):
 
     def execute(self) -> list[K]:
         result = []
-        items = self._app.db.get_items().copy()
-        transactions = self._app.tr_handler.get_transactions()
+        items = self._db_manager.db.get_items_for_value(self.val)
+        transactions = self._db_manager.tr_handler.get_transactions()
 
         for transaction in transactions:
             data = transaction.items.get_items()
@@ -122,15 +122,14 @@ class BeginCommand(BaseCommand):
     type: BaseCommandType = BaseCommandType.BEGIN
 
     def execute(self) -> None:
-        self._app.tr_handler.begin()
+        self._db_manager.tr_handler.begin()
 
 
 class RollbackCommand(BaseCommand):
     type: BaseCommandType = BaseCommandType.ROLLBACK
 
     def execute(self) -> None:
-        self._app.tr_handler.check_transactions()
-        self._app.tr_handler.rollback()
+        self._db_manager.tr_handler.pop_last_transaction()
 
 
 class CommitCommand(BaseCommand):
@@ -144,15 +143,15 @@ class CommitCommand(BaseCommand):
                 context.unset(k)
 
     def execute(self) -> None:
-        self._app.tr_handler.check_transactions()
-        prev_transaction = self._app.tr_handler.pop_last_transaction()
+        self._db_manager.tr_handler.check_transactions()
+        prev_transaction = self._db_manager.tr_handler.pop_last_transaction()
         data = prev_transaction.items.get_items()
 
-        if self._app.tr_handler.transaction_exist():
-            cur_transaction = self._app.tr_handler.get_last_transaction()
+        if self._db_manager.tr_handler.transaction_exist():
+            cur_transaction = self._db_manager.tr_handler.get_last_transaction()
             self._update_context(cur_transaction.items, data)
         else:
-            self._update_context(self._app.db, data)
+            self._update_context(self._db_manager.db, data)
 
 
 class Dispatcher:

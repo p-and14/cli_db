@@ -14,14 +14,15 @@ class TransactionHandler:
     def __init__(self) -> None:
         self._transactions: list[Transaction] = []
 
+    def get_transactions(self) -> list[Transaction]:
+        return self._transactions
+
     def begin(self) -> None:
         self._transactions.append(Transaction())
 
     def rollback(self) -> None:
-        self._transactions.pop()
-
-    def get_transactions(self) -> list[Transaction]:
-        return self._transactions
+        self.check_transactions()
+        self.pop_last_transaction()
 
     def check_transactions(self) -> None:
         if not self._transactions:
