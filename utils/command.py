@@ -58,9 +58,8 @@ class GetCommand[K, V](BaseCommand):
         transactions = self._db_manager.tr_handler.get_transactions()
         if transactions:
             for i in range(len(transactions) - 1, -1, -1):
-                value = transactions[i].items.get(self.key)
-                if value is not None:
-                    return value
+                if self.key in transactions[i].items.get_items():
+                    return transactions[i].items.get(self.key)
         return self._db_manager.db.get(self.key)
 
 
@@ -129,7 +128,7 @@ class RollbackCommand(BaseCommand):
     type: BaseCommandType = BaseCommandType.ROLLBACK
 
     def execute(self) -> None:
-        self._db_manager.tr_handler.pop_last_transaction()
+        self._db_manager.tr_handler.rollback()
 
 
 class CommitCommand(BaseCommand):
